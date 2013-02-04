@@ -218,6 +218,7 @@ void pwm_duty_ex(int timer_num, uint32_t duty)
 		   Implemented in ASM so we can be sure of the cycle
 		   count */
 		uint32_t tmp1, tmp2;
+#if 0
 		asm volatile (//".arm \n\t"
 			      "1: \n\t"
 			      "ldrh %[tmp1], %[comp] \n\t"		// load COMP1
@@ -243,6 +244,7 @@ void pwm_duty_ex(int timer_num, uint32_t duty)
 				[guard] "l" (pwm_info[timer_num].guard)
 			      : "memory"
 		);
+#endif
 	} else {
 		/* Just set it directly, timer isn't running */
 		timer->CMPLD1 = comp1;

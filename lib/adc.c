@@ -47,7 +47,7 @@
 #define ADC_PRESCALE_VALUE (REF_OSC / ADC_SAMPLE_FREQ)
 
 #define ADC_USE_TIMER      0
-#define ADC_USE_INTERRUPTS 0 // incomplete support
+#define ADC_USE_INTERRUPTS 1 // incomplete support
 
 uint16_t adc_reading[NUM_ADC_CHAN];
 
@@ -115,7 +115,8 @@ void adc_init(void) {
 	* For a 20µs convert time with 1MHz, value = 0x0014 (20dec)
 	* If convert time is insufficient, inaccurate sample data will result
 	*/
-	ADC->CONVERT_TIME  = 1000000 / (115200 / 8) - 1;
+	//ADC->CONVERT_TIME  = 1000000 / (115200 / 8) - 1;
+	ADC->CONVERT_TIME  = 0x0014 * 10;
 
 	ADC->MODE          = 0;        // Automatic
 
@@ -124,6 +125,7 @@ void adc_init(void) {
 #else
 	ADC->FIFO_CONTROL  = 0;
 #endif
+	//ADC->FIFO_CONTROL  = 0x8;
 
 #if ADC_USE_TIMER
 	ADC->SR_1_HIGH       = 0x0000;
@@ -138,11 +140,19 @@ void adc_init(void) {
 #endif
 	ADC->SEQ_1bits.BATT = 1;
 
-	ADC->CONTROL       = 0xF001
+	//ADC->CONTROL       = 0xF001
+	ADC->CONTROL       = 0x0001
 //#if ADC_USE_TIMER
 		| (1 << 1) // Timer 1 enable
 //#endif
 	;
-	ADC->OVERRIDE     = (1 << 8);
+	
+	//ADC->CONTROL |= 0x2000; // Enable Seq1_IRQ_Mask
+	//ADC->CONTROL |= 0xF000; // Enable all ADC interrupts.
+	ADC->CONTROL |= 0x8000; // Enable FIFO interrupts.
+	//ADC->CONTROL |= 0x1000; // Enable triggers.
+	
+	//ADC->OVERRIDE     = (1 << 8);
 
+	ADC->CONTROL |= 1;
 }
