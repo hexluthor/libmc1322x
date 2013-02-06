@@ -40,11 +40,29 @@
 #include "config.h"
 #include "adc.h"
 
+#define ADC_IRQ_FIFO_STATUS (1 << 15)
 
-#define NUM_RECS 10
-#define NUM_CHAN 10
+#define ADC_CH0  (1 << 0)
+#define ADC_CH1  (1 << 1)
+#define ADC_CH2  (1 << 2)
+#define ADC_CH3  (1 << 3)
+#define ADC_CH4  (1 << 4)
+#define ADC_CH5  (1 << 5)
+#define ADC_CH6  (1 << 6)
+#define ADC_CH7  (1 << 7)
+#define ADC_CH8  (1 << 8)
+#define ADC_BATT (1 << 8)
 
-uint16_t ring_buf[NUM_RECS * NUM_CHAN];
+#define SELECT_CHAN (ADC_CH0 | ADC_CH1 | ADC_CH2 | ADC_CH3 | ADC_CH4)
+
+#define NUM_CHAN_MAX 10
+#define EXTRA_CHAN    2 // counter and timestamp
+uint8_t NUM_CHAN;
+
+
+uint16_t ring_buf[32 * 1024];
+
+#define NUM_RECS (sizeof(ring_buf) / (NUM_CHAN * sizeof(uint16_t)))
 
 uint16_t head = 0, tail = 0;
 
@@ -62,6 +80,13 @@ uint16_t ring_free(void) {
 	return NUM_RECS - 1 - ring_used();
 }
 
+void daq_init(void) {
+	uint8_t n;
+	NUM_CHAN = EXTRA_CHAN;
+	for (n=0; n<=8; n++)
+		if (SELECT_CHAN & (1 << n)) NUM_CHAN++;
+}
+
 void adc_isr(void) {
 	uint16_t value, value2;
 	uint16_t next_head;
@@ -75,6 +100,9 @@ void adc_isr(void) {
 	value2 = ADC->FIFO_STATUS;
 	value2 = ADC->TRIGGERS;
 	
+	if (value & ADC_IRQ_FIFO_STATUS) {
+		// A FIFO level interrupt has occurred.
+		
 	//printf("ADC->IRQ = %04x, ", value);
 	/*
 	switch(isr_count) {
@@ -97,13 +125,15 @@ void adc_isr(void) {
 			value = ADC->FIFO_READ;
 			channel = value >> 12;
 			//if (channel < NUM_ADC_CHAN) adc_reading[channel] = value & 0xFFF;
-			if (channel + 2 >= NUM_CHAN) continue;
-			ring_buf[head * NUM_CHAN + channel + 2] = value & 0xFFF;
+			if (channel + EXTRA_CHAN >= NUM_CHAN) continue;
+			ring_buf[head * NUM_CHAN + channel + EXTRA_CHAN] = value & 0xFFF;
 		}
 	} else {
 		ADC_flush();
 	}
 	head = next_head;
+	
+	} // End ADC_IRQ_FIFO_STATUS
 	
 	//ADC->IRQ = value; // clear pending interrupts.
 	isr_count++;
@@ -140,8 +170,14 @@ int main(void)
 	
 	trim_xtal();
 	uart_init(UART1, 115200);
+	
+	daq_init();
+	
 	adc_init();
-	//powInit();
+	
+	ADC->FIFO_CONTROL = NUM_CHAN - EXTRA_CHAN + 1; // Why do we need to add one here. Is the documentation wrong?
+	
+	ADC_flush();
 	enable_irq(ADC);
 /*
 	printf("adc test\r\n");
@@ -191,8 +227,9 @@ dump(RESULT_2);
 	printf("\x1B[2J"); // clear screen
 */
 
-	for (c=0; c<=7; c++) {
-		adc_setup_chan(c);
+	for (c=0; c<=8; c++) {
+		if (SELECT_CHAN & (1 << c))
+			adc_setup_chan(c);
 	}
 
 	//for(;;);
