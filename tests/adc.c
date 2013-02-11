@@ -64,7 +64,7 @@ uint16_t ring_buf[32 * 1024];
 
 #define NUM_RECS (sizeof(ring_buf) / (NUM_CHAN * sizeof(uint16_t)))
 
-uint16_t head = 0, tail = 0;
+volatile uint16_t head = 0, tail = 0;
 
 
 volatile uint16_t isr_count = 0;
@@ -72,8 +72,11 @@ volatile uint16_t status1 = 0, status2 = 0;
 volatile uint16_t status_last = 0;
 
 uint16_t ring_used(void) {
-	if (head >= tail) return head - tail;
-	else return NUM_RECS + head - tail;
+	uint16_t latch_head, latch_tail;
+	latch_head = head;
+	latch_tail = tail;
+	if (latch_head >= latch_tail) return latch_head - latch_tail;
+	else return NUM_RECS + latch_head - latch_tail;
 }
 
 uint16_t ring_free(void) {
@@ -89,7 +92,6 @@ void daq_init(void) {
 
 void adc_isr(void) {
 	uint16_t value, value2;
-	uint16_t next_head;
 	uint16_t cnt;
 	
 	//cnt = CRM->RTC_COUNT;
@@ -114,7 +116,6 @@ void adc_isr(void) {
 	//adc_service();
 	
 	
-	next_head = (head + 1) % NUM_RECS;
 	if (ring_free() > 0) {
 	//if (next_head != tail) {
 		uint16_t value;
@@ -128,10 +129,10 @@ void adc_isr(void) {
 			if (channel + EXTRA_CHAN >= NUM_CHAN) continue;
 			ring_buf[head * NUM_CHAN + channel + EXTRA_CHAN] = value & 0xFFF;
 		}
+		head = (head + 1) % NUM_RECS;
 	} else {
 		ADC_flush();
 	}
-	head = next_head;
 	
 	} // End ADC_IRQ_FIFO_STATUS
 	
